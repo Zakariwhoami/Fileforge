@@ -1,0 +1,13 @@
+# Environment and secrets
+.env
+fileforge-e2a6d-firebase-adminsdk-fbsvc-0946c05b45.json
+
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
