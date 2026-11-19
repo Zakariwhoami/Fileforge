@@ -11,6 +11,7 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import "./App.css"
 import ForgotPassword from './pages/ForgotPassword'
+import Tool from './pages/Tool'
 
 function App() {
   return (
@@ -18,6 +19,8 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+
+          <Route path="/tools/:toolId" element={<Tool />} />
           
           <Route path="/" element={<Home />} />
 
