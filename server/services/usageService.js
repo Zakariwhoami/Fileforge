@@ -11,15 +11,15 @@ export async function getUsage(req) {
   const { rows } = account.userId
     ? await pool.query(
         `SELECT COUNT(*)::int AS n FROM jobs
-         WHERE user_id = $1 AND guest_id IS NULL
+         WHERE user_id = $1 AND guest_id IS NULL AND counted
            AND created_at > NOW() - INTERVAL '24 hours'`,
         [account.userId]
       )
     : await pool.query(
         `SELECT COUNT(*)::int AS n FROM jobs
-         WHERE guest_id IS NOT NULL AND (guest_id = $1 OR ip = $2)
+         WHERE guest_id IS NOT NULL AND counted AND (guest_id = $1 OR ip = $2)
            AND created_at > NOW() - INTERVAL '24 hours'`,
-        [guestId || null, req.ip || null]
+        [guestId || null, req.clientIp || null]
       )
 
   const used = rows[0].n
@@ -30,5 +30,6 @@ export async function getUsage(req) {
     limit: plan.dailyLimit,
     remaining: plan.dailyLimit == null ? null : Math.max(0, plan.dailyLimit - used),
     maxBytes: plan.maxBytes,
+    isAdmin: account.role === 'admin',
   }
 }

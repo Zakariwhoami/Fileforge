@@ -17,6 +17,7 @@ import {
   compressPdf,
 } from '../services/documentService.js'
 import { getUsage } from '../services/usageService.js'
+import { lookupGeo } from '../utils/ip.js'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -142,6 +143,7 @@ export async function processFile(req, res) {
 
     await plan.run(outputPath)
 
+    const geo = lookupGeo(req.clientIp)
     const outputBytes = (await fs.stat(outputPath)).size
     const base =
       path.parse(req.file.originalname).name.replace(/[^\w.\- ]+/g, '_').slice(0, 100) || 'file'
@@ -149,13 +151,15 @@ export async function processFile(req, res) {
 
     const { rows } = await pool.query(
       `INSERT INTO jobs
-        (user_id, guest_id, ip, tool, original_name, output_name, stored_name, input_bytes, output_bytes, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW() + ($10 || ' minutes')::interval)
+        (user_id, guest_id, ip, country, city, tool, original_name, output_name, stored_name, input_bytes, output_bytes, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW() + ($12 || ' minutes')::interval)
        RETURNING *`,
       [
         account.userId || null,
         account.userId ? null : req.guestId,
-        (req.ip || '').slice(0, 64) || null,
+        (req.clientIp || '').slice(0, 64) || null,
+        geo.country,
+        geo.city,
         tool,
         req.file.originalname.slice(0, 255),
         outputName,

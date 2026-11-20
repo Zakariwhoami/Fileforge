@@ -1,6 +1,7 @@
 # Environment and secrets
 .env
 fileforge-e2a6d-firebase-adminsdk-fbsvc-0946c05b45.json
+README(ADMIN).md
 
 # Dependencies
 node_modules/

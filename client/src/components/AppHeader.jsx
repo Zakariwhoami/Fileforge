@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 
 import { Logo } from './ui'
 import { useAuth } from '../context/AuthContext'
 import { logoutUser } from '../services/auth'
+import { getUsage } from '../services/files'
 import { tools } from '../tools'
 
 const liveTools = tools.filter((t) => t.ready)
@@ -12,6 +14,17 @@ export default function AppHeader() {
   const { user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false)
+      return
+    }
+    getUsage()
+      .then((usage) => setIsAdmin(Boolean(usage.isAdmin)))
+      .catch(() => {})
+  }, [user])
 
   // After signing in, send visitors back to the page they were on.
   const authState = { from: location.pathname }
@@ -50,6 +63,14 @@ export default function AppHeader() {
         <div className="ml-auto flex items-center gap-1 text-sm font-medium md:ml-0">
           {user ? (
             <>
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  className="rounded-lg px-3 py-2 text-blue-700 hover:bg-blue-50"
+                >
+                  Admin
+                </Link>
+              )}
               <Link
                 to="/dashboard"
                 className="rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900"

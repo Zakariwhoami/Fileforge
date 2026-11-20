@@ -12,6 +12,8 @@ import Dashboard from './pages/Dashboard'
 import "./App.css"
 import ForgotPassword from './pages/ForgotPassword'
 import Tool from './pages/Tool'
+import Pricing from './pages/Pricing'
+import Admin from './pages/Admin'
 
 function App() {
   return (
@@ -19,10 +21,13 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
+          <Route path="/admin" element={<Admin />} />
 
           <Route path="/tools/:toolId" element={<Tool />} />
           
-          <Route path="/" element={<Home />} />
+          <Route path="/pricing" element={<Pricing />} />
+          
+          <Route path="/" element={<Dashboard />} />
 
           <Route path="/forgot-password" element={<ForgotPassword />} />
 

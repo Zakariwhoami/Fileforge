@@ -1,10 +1,7 @@
 import { auth } from '../firebase/config'
+import { API_ROOT } from '../config'
 
-// Works whether VITE_API_URL is "http://localhost:5000" or "http://localhost:5000/api".
-const ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000')
-  .replace(/\/+$/, '')
-  .replace(/\/api$/, '')
-const API_URL = `${ROOT}/api`
+const API_URL = `${API_ROOT}/api`
 
 const GUEST_KEY = 'ff_guest_id'
 const PENDING_KEY = 'ff_pending_download'
@@ -17,17 +14,27 @@ export function formatBytes(n) {
   return `${(n / 1024 ** 2).toFixed(1)} MB`
 }
 
+// crypto.randomUUID only exists on https or localhost, so use a fallback for plain http.
+function newId() {
+  if (crypto.randomUUID) return crypto.randomUUID()
+  const b = crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40
+  b[8] = (b[8] & 0x3f) | 0x80
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('')
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`
+}
+
 // A random id that lets a visitor use the tools without an account.
 export function getGuestId() {
   try {
     let id = localStorage.getItem(GUEST_KEY)
     if (!id) {
-      id = crypto.randomUUID()
+      id = newId()
       localStorage.setItem(GUEST_KEY, id)
     }
     return id
   } catch {
-    memoryGuestId = memoryGuestId || crypto.randomUUID()
+    memoryGuestId = memoryGuestId || newId()
     return memoryGuestId
   }
 }
@@ -51,7 +58,7 @@ export function takePendingDownload() {
   }
 }
 
-async function request(path, options = {}) {
+export async function request(path, options = {}) {
   // Wait until Firebase has restored the saved login, so a signed-in user is not sent as a guest.
   if (typeof auth.authStateReady === 'function') await auth.authStateReady()
 
