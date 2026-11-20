@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
   FileText,
-  FileType2,
   Image as ImageIcon,
   Minimize2,
   ArrowRight,
@@ -11,12 +10,12 @@ import {
 
 import { useAuth } from '../context/AuthContext'
 import { Logo } from '../components/ui'
-import "../App.css"
+
 const tools = [
-  { icon: FileText, title: 'Word to PDF', text: 'Turn .docx files into PDFs that look the same everywhere.' },
-  { icon: FileType2, title: 'PDF to Word', text: 'Get an editable document back from a PDF.' },
-  { icon: ImageIcon, title: 'JPG and PNG', text: 'Switch between image formats in one step.' },
-  { icon: Minimize2, title: 'Compress images and PDFs', text: 'Cut file size so they are easy to send and store.' }
+  { to: '/tools/word-to-pdf', icon: FileText, title: 'Word to PDF', text: 'Turn .docx files into PDFs that look the same everywhere.' },
+  { to: '/tools/compress-pdf', icon: Minimize2, title: 'Compress PDF', text: 'Make PDFs small enough to email and share.' },
+  { to: '/tools/convert-image', icon: ImageIcon, title: 'Convert images', text: 'Switch between JPG, PNG and WebP in one step.' },
+  { to: '/tools/compress-image', icon: Minimize2, title: 'Compress images', text: 'Cut image size without a visible drop in quality.' }
 ]
 
 const steps = [
@@ -101,10 +100,10 @@ export default function Home() {
 
             <div className="mt-9 flex flex-wrap gap-3">
               <Link
-                to={user ? '/dashboard' : '/register'}
+                to={user ? '/dashboard' : '/tools/compress-image'}
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 font-semibold text-white hover:bg-blue-700"
               >
-                {user ? 'Open dashboard' : 'Create a free account'}
+                {user ? 'Open dashboard' : 'Try it free, no sign up'}
                 <ArrowRight size={18} />
               </Link>
               {!user && (
@@ -128,10 +127,11 @@ export default function Home() {
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">What you can do</h2>
 
         <div className="mt-8 grid divide-y divide-slate-100 border-y border-slate-100 md:grid-cols-2 md:divide-y-0">
-          {tools.map(({ icon: Icon, title, text }, i) => (
-            <div
+          {tools.map(({ to, icon: Icon, title, text }, i) => (
+            <Link
               key={title}
-              className={`flex gap-4 py-6 md:px-6 ${i > 1 ? 'md:border-t md:border-slate-100' : ''} ${i % 2 === 1 ? 'md:border-l md:border-slate-100' : ''}`}
+              to={to}
+              className={`flex gap-4 py-6 transition hover:bg-blue-50/40 md:px-6 ${i > 1 ? 'md:border-t md:border-slate-100' : ''} ${i % 2 === 1 ? 'md:border-l md:border-slate-100' : ''}`}
             >
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
                 <Icon size={22} />
@@ -140,7 +140,7 @@ export default function Home() {
                 <h3 className="font-semibold">{title}</h3>
                 <p className="mt-1 text-sm text-slate-600">{text}</p>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </section>

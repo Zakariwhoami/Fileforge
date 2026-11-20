@@ -11,7 +11,7 @@ const root = path.resolve(
 export const TMP_DIR = path.join(root, 'tmp') // incoming uploads, deleted right after processing
 export const OUT_DIR = path.join(root, 'out') // processed results, deleted when they expire
 export const FILE_TTL_MINUTES = 60
-export const MAX_FILE_BYTES = 25 * 1024 * 1024
+export const MAX_FILE_BYTES = 100 * 1024 * 1024 // hard cap, plan limits are in config/plans.js
 
 fs.mkdirSync(TMP_DIR, { recursive: true })
 fs.mkdirSync(OUT_DIR, { recursive: true })

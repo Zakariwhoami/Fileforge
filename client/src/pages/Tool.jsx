@@ -1,17 +1,24 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
-  ArrowLeft,
   UploadCloud,
   File as FileIcon,
   Download,
   CheckCircle2,
+  Lock,
   X
 } from 'lucide-react'
 
-import { Logo } from '../components/ui'
+import AppHeader from '../components/AppHeader'
+import { useAuth } from '../context/AuthContext'
 import { toolById } from '../tools'
-import { processFile, downloadJob, formatBytes, MAX_FILE_BYTES } from '../services/files'
+import {
+  processFile,
+  getUsage,
+  downloadJob,
+  setPendingDownload,
+  formatBytes
+} from '../services/files'
 
 const FORMAT_OPTIONS = [
   { id: 'jpeg', label: 'JPG', mime: 'image/jpeg' },
@@ -19,18 +26,40 @@ const FORMAT_OPTIONS = [
   { id: 'webp', label: 'WebP', mime: 'image/webp' },
 ]
 
-export default function Tool() {
-  const { toolId } = useParams()
+const LEVEL_OPTIONS = [
+  { id: 'high', label: 'Smallest file', note: 'Lowest image quality' },
+  { id: 'medium', label: 'Balanced', note: 'Good for email and sharing' },
+  { id: 'low', label: 'Best quality', note: 'Light compression, good for printing' },
+]
+
+const buttonPrimary =
+  'inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700'
+const buttonSecondary =
+  'rounded-xl border border-slate-200 bg-white px-5 py-2.5 font-medium text-slate-700 hover:bg-slate-50'
+
+function ToolWorkspace({ toolId }) {
   const tool = toolById[toolId]
+  const { user } = useAuth()
   const inputRef = useRef(null)
 
   const [file, setFile] = useState(null)
   const [quality, setQuality] = useState(75)
+  const [target, setTarget] = useState('')
+  const [level, setLevel] = useState('medium')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [job, setJob] = useState(null)
   const [dragging, setDragging] = useState(false)
-  const [target, setTarget] = useState('')
+  const [usage, setUsage] = useState(null)
+  const [limitHit, setLimitHit] = useState(false)
+
+  useEffect(() => {
+    getUsage().then(setUsage).catch(() => {})
+  }, [user])
+
+  const maxBytes = usage?.maxBytes ?? 10 * 1024 * 1024
+  const outOfAttempts = limitHit || usage?.remaining === 0
+  const authState = { from: user ? '/dashboard' : `/tools/${toolId}` }
 
   function choose(selected) {
     setError('')
@@ -38,12 +67,17 @@ export default function Tool() {
     setTarget('')
     if (!selected) return
 
-    if (!tool.mimes.includes(selected.type)) {
+    const ext = `.${selected.name.split('.').pop().toLowerCase()}`
+    if (!tool.exts.includes(ext)) {
       setError(`This tool accepts: ${tool.hint}.`)
       return
     }
-    if (selected.size > MAX_FILE_BYTES) {
-      setError('That file is too large. The limit is 25 MB.')
+    if (selected.size > maxBytes) {
+      setError(
+        `That file is larger than your ${formatBytes(maxBytes)} limit.${
+          user ? ' Premium allows larger files.' : ' Free accounts allow larger files.'
+        }`
+      )
       return
     }
     setFile(selected)
@@ -53,16 +87,22 @@ export default function Tool() {
     setBusy(true)
     setError('')
     try {
-      setJob(
-        await processFile({
-          file,
-          tool: tool.id,
-          quality: tool.hasQuality ? quality : undefined,
-          target: tool.hasTarget ? target : undefined,
-        })
-      )
+      const result = await processFile({
+        file,
+        tool: tool.id,
+        quality: tool.hasQuality ? quality : undefined,
+        target: tool.hasTarget ? target : undefined,
+        level: tool.hasLevel ? level : undefined,
+      })
+      setJob(result.job)
+      setUsage(result.usage)
     } catch (err) {
-      setError(err.message)
+      if (err.code === 'LIMIT_REACHED') {
+        setLimitHit(true)
+        getUsage().then(setUsage).catch(() => {})
+      } else {
+        setError(err.message)
+      }
     } finally {
       setBusy(false)
     }
@@ -89,8 +129,8 @@ export default function Tool() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-6 text-center">
         <h1 className="text-2xl font-semibold text-slate-900">This tool is not available yet</h1>
-        <Link to="/dashboard" className="mt-4 font-semibold text-blue-600 hover:underline">
-          Back to dashboard
+        <Link to="/" className="mt-4 font-semibold text-blue-600 hover:underline">
+          Back to home
         </Link>
       </div>
     )
@@ -100,22 +140,28 @@ export default function Tool() {
 
   return (
     <div className="min-h-dvh bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Logo />
-          <Link
-            to="/dashboard"
-            className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
-          >
-            <ArrowLeft size={16} />
-            Dashboard
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto max-w-2xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">{tool.title}</h1>
         <p className="mt-2 text-slate-600">{tool.description}</p>
+
+        {usage && (
+          <p className="mt-3 text-sm text-slate-500">
+            {usage.remaining == null
+              ? 'Premium: unlimited conversions.'
+              : `${usage.remaining} of ${usage.limit} conversions left today.`}
+            {!user && ' Sign up free to download your files and get more conversions.'}
+            {user && usage.plan === 'free' && (
+              <>
+                {' '}
+                <Link to="/pricing" className="font-medium text-blue-600 hover:underline">
+                  Upgrade
+                </Link>
+              </>
+            )}
+          </p>
+        )}
 
         {error && (
           <div role="alert" className="mt-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -127,37 +173,86 @@ export default function Tool() {
           <div className="mt-6 rounded-2xl border border-green-200 bg-white p-6">
             <div className="flex items-center gap-2 font-semibold text-green-700">
               <CheckCircle2 size={20} />
-              Done
+              {user ? 'Done' : 'Your file is ready'}
             </div>
 
             <p className="mt-4 font-medium text-slate-900">{job.outputName}</p>
             <p className="mt-1 text-sm text-slate-600">
               {formatBytes(job.inputBytes)} to {formatBytes(job.outputBytes)}
-              {tool.hasQuality &&
+              {tool.id.startsWith('compress') &&
                 (saved > 0
                   ? `, ${Math.round((saved / job.inputBytes) * 100)}% smaller`
-                  : '. This image was already well optimized.')}
+                  : '. This file was already well optimized, so the original was kept.')}
             </p>
 
-            <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                onClick={download}
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
-              >
-                <Download size={18} />
-                Download
-              </button>
-              <button
-                onClick={reset}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Process another file
-              </button>
-            </div>
+            {user ? (
+              <div className="mt-6 flex flex-wrap gap-3">
+                <button onClick={download} className={buttonPrimary}>
+                  <Download size={18} />
+                  Download
+                </button>
+                <button onClick={reset} className={buttonSecondary}>
+                  Process another file
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="mt-5 text-sm text-slate-600">
+                  Create a free account to download it. It takes a few seconds, and your file will
+                  download right after.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <Link
+                    to="/register"
+                    state={{ from: '/dashboard' }}
+                    onClick={() => setPendingDownload(job.id)}
+                    className={buttonPrimary}
+                  >
+                    <Lock size={16} />
+                    Sign up free to download
+                  </Link>
+                  <Link
+                    to="/login"
+                    state={{ from: '/dashboard' }}
+                    onClick={() => setPendingDownload(job.id)}
+                    className={buttonSecondary}
+                  >
+                    I have an account
+                  </Link>
+                </div>
+              </>
+            )}
 
             <p className="mt-4 text-xs text-slate-500">
               The file is kept for 1 hour, then deleted from our server.
             </p>
+          </div>
+        ) : outOfAttempts ? (
+          <div className="mt-6 rounded-2xl border border-blue-100 bg-white p-6">
+            <h2 className="font-semibold text-slate-900">
+              {user ? 'You have used all of today\u2019s conversions' : 'You have used your free conversions for today'}
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {user
+                ? 'Upgrade to Premium for unlimited conversions, or come back tomorrow.'
+                : 'Create a free account to get more conversions every day.'}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {user ? (
+                <Link to="/pricing" className={buttonPrimary}>
+                  See Premium
+                </Link>
+              ) : (
+                <>
+                  <Link to="/register" state={authState} className={buttonPrimary}>
+                    Create a free account
+                  </Link>
+                  <Link to="/login" state={authState} className={buttonSecondary}>
+                    Log in
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         ) : (
           <div className="mt-6 space-y-5">
@@ -180,7 +275,9 @@ export default function Tool() {
               >
                 <UploadCloud size={36} className="text-blue-600" />
                 <p className="mt-4 font-medium text-slate-900">Drop a file here or click to choose</p>
-                <p className="mt-1 text-sm text-slate-500">{tool.hint}</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {tool.hint}, up to {formatBytes(maxBytes)}
+                </p>
               </div>
             ) : (
               <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
@@ -205,7 +302,7 @@ export default function Tool() {
             <input
               ref={inputRef}
               type="file"
-              accept={tool.mimes.join(',')}
+              accept={tool.exts.join(',')}
               className="hidden"
               onChange={(e) => choose(e.target.files?.[0])}
             />
@@ -235,9 +332,31 @@ export default function Tool() {
                     )
                   })}
                 </div>
-                <p className="mt-3 text-xs text-slate-500">
-                  Your file is already in the disabled format.
-                </p>
+                <p className="mt-3 text-xs text-slate-500">Your file is already in the disabled format.</p>
+              </div>
+            )}
+
+            {file && tool.hasLevel && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <p className="text-sm font-medium text-slate-700">Compression level</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {LEVEL_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setLevel(opt.id)}
+                      aria-pressed={level === opt.id}
+                      className={`rounded-xl border px-4 py-3 text-left transition ${
+                        level === opt.id
+                          ? 'border-blue-600 bg-blue-50'
+                          : 'border-slate-200 bg-white hover:border-blue-300'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold text-slate-900">{opt.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-500">{opt.note}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -272,4 +391,10 @@ export default function Tool() {
       </main>
     </div>
   )
+}
+
+// The key makes React start fresh (empty file, options and result) when switching tools.
+export default function Tool() {
+  const { toolId } = useParams()
+  return <ToolWorkspace key={toolId} toolId={toolId} />
 }

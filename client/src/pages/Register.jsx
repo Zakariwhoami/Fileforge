@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Mail, Lock, User } from 'lucide-react'
 
 import { registerUser, googleLogin } from '../services/auth'
 import { syncUser } from '../services/api'
+import { claimGuestJobs } from '../services/files'
 import { friendlyError } from '../utils/authErrors'
 import AuthLayout from '../components/AuthLayout'
 import { Field, GoogleIcon } from '../components/ui'
 
 export default function Register() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const redirectTo = location.state?.from || '/dashboard'
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -25,7 +28,8 @@ export default function Register() {
     try {
       await registerUser(name, email, password)
       await syncUser()
-      navigate('/dashboard')
+      await claimGuestJobs()
+      navigate(redirectTo)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -40,7 +44,8 @@ export default function Register() {
     try {
       await googleLogin()
       await syncUser()
-      navigate('/dashboard')
+      await claimGuestJobs()
+      navigate(redirectTo)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -55,7 +60,7 @@ export default function Register() {
       footer={
         <>
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-blue-600 hover:underline">
+          <Link to="/login" state={location.state} className="font-semibold text-blue-600 hover:underline">
             Log in
           </Link>
         </>

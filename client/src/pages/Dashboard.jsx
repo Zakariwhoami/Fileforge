@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { History, LogOut, Upload, Download, Trash2 } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { History, Upload, Download, Trash2 } from 'lucide-react'
 
 import { useAuth } from '../context/AuthContext'
-import { logoutUser } from '../services/auth'
-import { getHistory, downloadJob, deleteJob, formatBytes } from '../services/files'
+import {
+  getHistory,
+  getUsage,
+  downloadJob,
+  deleteJob,
+  takePendingDownload,
+  formatBytes
+} from '../services/files'
 import { tools, toolById } from '../tools'
-import { Logo } from '../components/ui'
+import AppHeader from '../components/AppHeader'
 
 const sections = ['Convert', 'Compress'].map((title) => ({
   title,
@@ -50,29 +56,32 @@ function ToolCard({ tool }) {
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const navigate = useNavigate()
 
   const [jobs, setJobs] = useState(null)
   const [historyError, setHistoryError] = useState('')
+  const [usage, setUsage] = useState(null)
 
   const displayName = user?.displayName || ''
   const firstName = displayName.split(' ')[0] || 'there'
-  const initial = (displayName || user?.email || 'U').charAt(0).toUpperCase()
 
   useEffect(() => {
     if (!user) return
+    getUsage().then(setUsage).catch(() => {})
     getHistory()
-      .then(setJobs)
+      .then((list) => {
+        setJobs(list)
+        // A visitor who signed up to download gets their file straight away.
+        const pendingId = takePendingDownload()
+        const pending = list.find((j) => j.id === pendingId)
+        if (pending?.downloadable) {
+          downloadJob(pending).catch((err) => setHistoryError(err.message))
+        }
+      })
       .catch((err) => {
         setHistoryError(err.message)
         setJobs([])
       })
   }, [user])
-
-  async function handleLogout() {
-    await logoutUser()
-    navigate('/login')
-  }
 
   async function handleDownload(job) {
     try {
@@ -93,34 +102,25 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-dvh bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Logo />
-
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white">
-                {initial}
-              </span>
-              <span className="hidden max-w-40 truncate text-sm font-medium text-slate-700 sm:block">
-                {displayName || user?.email}
-              </span>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-red-50 hover:text-red-600"
-            >
-              <LogOut size={16} />
-              Log out
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppHeader />
 
       <main className="mx-auto max-w-6xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Welcome, {firstName}</h1>
         <p className="mt-2 text-slate-600">Pick a tool to convert or compress a file.</p>
+
+        {usage && (
+          <p className="mt-3 text-sm text-slate-500">
+            {usage.planLabel} plan:{' '}
+            {usage.remaining == null
+              ? 'unlimited conversions.'
+              : `${usage.remaining} of ${usage.limit} conversions left today.`}{' '}
+            {usage.plan === 'free' && (
+              <Link to="/pricing" className="font-medium text-blue-600 hover:underline">
+                See Premium
+              </Link>
+            )}
+          </p>
+        )}
 
         <div className="mt-10 space-y-10">
           {sections.map((section) => (

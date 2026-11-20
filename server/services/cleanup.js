@@ -21,6 +21,9 @@ async function sweep() {
       )
     }
 
+    // Old history rows are no longer needed (usage limits only look back 24 hours).
+    await pool.query(`DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '30 days'`)
+
     // 2. Remove leftovers from crashes. Anything older than 2 hours is safe to delete.
     for (const dir of [TMP_DIR, OUT_DIR]) {
       for (const name of await fs.readdir(dir)) {

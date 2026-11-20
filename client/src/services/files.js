@@ -6,7 +6,9 @@ const ROOT = (import.meta.env.VITE_API_URL || 'http://localhost:5000')
   .replace(/\/api$/, '')
 const API_URL = `${ROOT}/api`
 
-export const MAX_FILE_BYTES = 25 * 1024 * 1024
+const GUEST_KEY = 'ff_guest_id'
+const PENDING_KEY = 'ff_pending_download'
+let memoryGuestId = null
 
 export function formatBytes(n) {
   if (n == null) return ''
@@ -15,42 +17,85 @@ export function formatBytes(n) {
   return `${(n / 1024 ** 2).toFixed(1)} MB`
 }
 
-async function request(path, options = {}) {
-  const user = auth.currentUser
-  if (!user) throw new Error('Your session has ended. Log in again.')
+// A random id that lets a visitor use the tools without an account.
+export function getGuestId() {
+  try {
+    let id = localStorage.getItem(GUEST_KEY)
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem(GUEST_KEY, id)
+    }
+    return id
+  } catch {
+    memoryGuestId = memoryGuestId || crypto.randomUUID()
+    return memoryGuestId
+  }
+}
 
-  const token = await user.getIdToken()
+// Remember which file to download right after the visitor signs up or logs in.
+export function setPendingDownload(id) {
+  try {
+    sessionStorage.setItem(PENDING_KEY, String(id))
+  } catch {
+    // ignore
+  }
+}
+
+export function takePendingDownload() {
+  try {
+    const value = sessionStorage.getItem(PENDING_KEY)
+    sessionStorage.removeItem(PENDING_KEY)
+    return value ? Number(value) : null
+  } catch {
+    return null
+  }
+}
+
+async function request(path, options = {}) {
+  // Wait until Firebase has restored the saved login, so a signed-in user is not sent as a guest.
+  if (typeof auth.authStateReady === 'function') await auth.authStateReady()
+
+  const headers = { ...options.headers }
+  const user = auth.currentUser
+  if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`
+  else headers['X-Guest-Id'] = getGuestId()
 
   let res
   try {
-    res = await fetch(`${API_URL}${path}`, {
-      ...options,
-      headers: { ...options.headers, Authorization: `Bearer ${token}` },
-    })
+    res = await fetch(`${API_URL}${path}`, { ...options, headers })
   } catch {
     throw new Error('Cannot reach the server. Check that the backend is running.')
   }
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(
+    const err = new Error(
       data.message ||
         data.error ||
         `Request failed (${res.status}). Check the server terminal for details.`
     )
+    err.code = data.code
+    err.status = res.status
+    throw err
   }
   return res
 }
 
-export async function processFile({ file, tool, quality, target }) {
+export async function processFile({ file, tool, quality, target, level }) {
   const body = new FormData()
   body.append('tool', tool)
   if (target) body.append('target', target)
+  if (level) body.append('level', level)
   if (quality) body.append('quality', String(quality))
   body.append('file', file) // append the file last so fields are parsed first
 
   const res = await request('/files/process', { method: 'POST', body })
-  return (await res.json()).job
+  return res.json() // { job, usage }
+}
+
+export async function getUsage() {
+  const res = await request('/files/usage')
+  return (await res.json()).usage
 }
 
 export async function getHistory() {
@@ -60,6 +105,19 @@ export async function getHistory() {
 
 export async function deleteJob(id) {
   await request(`/files/${id}`, { method: 'DELETE' })
+}
+
+// Links files made as a guest to the account that just signed in. Never blocks login.
+export async function claimGuestJobs() {
+  try {
+    await request('/files/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guestId: getGuestId() }),
+    })
+  } catch {
+    // not critical
+  }
 }
 
 export async function downloadJob(job) {

@@ -1,15 +1,18 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Mail, Lock } from 'lucide-react'
 
 import { loginUser, googleLogin } from '../services/auth'
 import { syncUser } from '../services/api'
+import { claimGuestJobs } from '../services/files'
 import { friendlyError } from '../utils/authErrors'
 import AuthLayout from '../components/AuthLayout'
 import { Field, GoogleIcon } from '../components/ui'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const redirectTo = location.state?.from || '/dashboard'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,7 +27,8 @@ export default function Login() {
     try {
       await loginUser(email, password)
       await syncUser()
-      navigate('/dashboard')
+      await claimGuestJobs()
+      navigate(redirectTo)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -39,7 +43,8 @@ export default function Login() {
     try {
       await googleLogin()
       await syncUser()
-      navigate('/dashboard')
+      await claimGuestJobs()
+      navigate(redirectTo)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -54,7 +59,7 @@ export default function Login() {
       footer={
         <>
           New to FileForge?{' '}
-          <Link to="/register" className="font-semibold text-blue-600 hover:underline">
+          <Link to="/register" state={location.state} className="font-semibold text-blue-600 hover:underline">
             Create an account
           </Link>
         </>

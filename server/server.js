@@ -20,7 +20,8 @@ app.get('/api/health', (req, res) => {     // 3. routes
 })
 
 app.use('/api/auth', authRoutes)
-app.use('/api/files', verifyToken, filesRoutes)
+// app.use('/api/files', verifyToken, filesRoutes)  --- because the new route code now checks the token itself, no need for verifytoken
+app.use('/api/files', filesRoutes)
 
 app.listen(PORT, () => {                   // 4. start the server
   console.log(`Server running on http://localhost:${PORT}`)
